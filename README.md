@@ -21,7 +21,7 @@ Introduction
 ------------
 #### Recommended Viewing
 - [Full-Stack Flux](https://www.youtube.com/watch?v=KtmjkCuV-EU) - Pete Hunt from Instagram/Facebook discusses what problems Flux is designed to solve, and how centralizing the source of truth in your application can naturally minimize complexity.
-- [Redux](https://www.youtube.com/watch?v=xsSnOQynTHs) - Redux, a not-so-Flux-like Flux implementation, describes what inspired it and how it relates to Flux, and the benefits that result from its divergence. Helps solidify general Flux knowledge through comparisons and examples.
+- [Redux](https://www.youtube.com/watch?v=xsSnOQynTHs) - Redux, a not-so-Flux-like Flux implementation. Video describes what inspired it and how it relates to Flux, and the benefits that result from its divergence. Helps solidify general Flux knowledge through comparisons and examples.
 - [React.js Conf 2015](http://facebook.github.io/react/blog/2015/02/18/react-conf-roundup-2015.html) - Round-up of all the talks from this awesome conference.
 
 #### Recommended Reading
@@ -93,7 +93,11 @@ What about views? I had this exact question, which the author of Redux was [kind
 Flux
 ----
 
-Flux boils down to a pretty basic concept: your core application state should be able to be represented by a single "input" at any point in time. And, similar to components, an application is just one big function that encompasses a bunch of smaller functions. You take some state representation, run it through your application, and out pops a result!
+So unidirectional data flow and smart/dumb components sound like a great idea, but how do they fit together? What kind of architecture surrounds them? Enter Flux.
+
+Flux boils down to a pretty basic concept: data flows in one direction through your application, with data and the actions that change it being centralized in stores. Components react to changes in stores, but it's important to note that they react based on the new state that's produced, not the events themselves.
+
+If you take this description further, it can be extrapolated to state that your core application state should be able to be represented by a single "input" at any point in time. And, similar to components, an application is just one big function that encompasses a bunch of smaller functions. You take some state representation, run it through your application, and out pops a result!
 
 ### Stores
 
@@ -139,11 +143,11 @@ If you use immutable data structures, you now have the _completely free_ ability
 
 #### Redux
 **Recommended Viewing**
-  - [Dan Abramov - Live React](https://www.youtube.com/watch?v=xsSnOQynTHs#t=11m) - Links directly to 11m where Dan Abramov discusses how traditional Flux stores can be boiled down into reducers. He basically more elegantly describes everything I'm about to try to explain.
+  - [Dan Abramov - Live React](https://www.youtube.com/watch?v=xsSnOQynTHs#t=11m) - Links directly to the 11-minute timestamp where Dan Abramov discusses how traditional Flux stores can be simplified as reducers. Basically, he more elegantly describes everything I'm about to try to explain.
 
 Redux, or "reducers" + "flux", takes the original principles of flux but applies them in an even more purely functional manner. Traditional flux stores are responsible for emitting changes that components can listen to, and this allows state to be mutable. It also means that there is no singular, cohesive application state, but instead multiple top-level stores. The distinction might sound trivial, but it's not and here's why.
 
-First, let's recall the function signature for a reducer. You're familiar with the `[].reduce` function, right? If not, here's a refresher:
+First, let's recall the function signature for a reducer. If you're not already familiar with it, here's a refresher:
 
 ```js
 // (acc, val) -> val
@@ -152,7 +156,19 @@ First, let's recall the function signature for a reducer. You're familiar with t
 }); // 6
 ```
 
-The function takes a collection and runs through them sequentially, "accumulating" a result as it goes. The first argument to the callback function is the accumulator, the second is the next item. So what if
+The function takes a collection and runs through them sequentially, "accumulating" a result as it does. The first argument to the callback function is the accumulator, the second is the next item. So what if we approached applications in the same way? The application could start with some initial state, and you get a new state as actions are accumulated.
+
+```js
+[createTodo, deleteTodo, toggleCompleteTodo].reduce(function (state, action) {
+  // your application!
+}, initialState);
+```
+
+So now your stores are essentially _reducers_; they receive actions and return a new state. And since they're pure, you can compose them together, into an application reducer. Actions come in, state comes out. The important thing to note here is that reducers must remain pure - that is, without side-effects - and they must return a _new_ state, they cannot mutate the old one.
+
+By following these two simple rules, you not only reduce immediate complexity but you allow other things to occur naturally within the codebase. Redux can now see that your state is different, not by deep equality checks but just by reference, and automatically update subscribed components. No more `emitChange()` in stores!
+
+Redux provides additional benefits; for one, since state is immutable, it's very easy to record state changes. This is the basis for [redux-devtools](https://github.com/gaearon/redux-devtools), which allow you to step through time. It also means it's possible to test applications simply by feeding it a collection of actions and analyzing the result; no extra effort required.
 
 Summary
 -------
