@@ -14,6 +14,7 @@ Table of Contents
   - Dispatcher
   - Immutability
   - Benefits
+  - Async
   - Flavors
 1. [Summary](#summary)
 
@@ -25,7 +26,7 @@ Introduction
 - [React.js Conf 2015](http://facebook.github.io/react/blog/2015/02/18/react-conf-roundup-2015.html) - Round-up of all the talks from this awesome conference.
 
 #### Recommended Reading
-- [Redux Documentation](http://rackt.github.io/redux/docs/introduction/Motivation.html)
+- [Thinking in React](http://facebook.github.io/react/docs/thinking-in-react.html)
 - [Flux from an Angular perspective](http://blog.celerity.com/react/flux-from-an-angularjs-perspective)
 - [[Official] Thinking in React](http://facebook.github.io/react/docs/thinking-in-react.html)
 - [Getting to Know Flux](https://scotch.io/tutorials/getting-to-know-flux-the-react-js-architecture)
@@ -57,7 +58,7 @@ function add (a, b) {
 }
 ```
 
-you can reasonably expect get the same output for every input, anything else and what's the point? If you extrapolate this to the application level, you should be able to pass in some state (properties) and obtain the same result every time. This is far easier said than done, and as a result it's common to introduce side-effects and impure functions, ultimately complicating applications to the point that they become non-deterministic and difficult to reason about. However, if you succeed, your application becomes a simple function composed of declarative components, allowing you to easily reproduce any state just by providing the correct input.
+you can reasonably expect get the same output for every input, anything else and what's the point? If you extrapolate this to the application level, you should be able to pass in some state (properties) and obtain the same result every time. This is far easier said than done, and as a result it's common to introduce side effects and impure functions, ultimately complicating applications to the point that they become non-deterministic and difficult to reason about. However, if you succeed, your application becomes a simple function composed of declarative components, allowing you to easily reproduce any state just by providing the correct input.
 
 On the component level, by adhering to pure functions (in React all render methods should be pure) components become [referentially transparent](http://stackoverflow.com/questions/210835/what-is-referential-transparency). This makes testing incredibly easy because, just like your application, you can just pass a component a set of properties and analyze the result; no need to track what mutations occur over time (not to mention the myriad of possible combinations and timings). This is just part of why functional reactive programming is _awesome_.
 
@@ -87,6 +88,7 @@ This may seem like a lot of work, and it does take more effort than simply allow
 
 #### Smart Components
 
+
 What about views? I had this exact question, which the author of Redux was [kind enough to clarify](https://github.com/rackt/redux/issues/562#event-384662248).
 
 
@@ -107,9 +109,76 @@ Importantly, stores are _entirely synchronous_. They receive actions and perform
 
 ### Actions
 
-So you have a centralized store, awesome, but how do you communicate with it? After all, that's the whole point of an application, _doing_ something.
+So you have a centralized store, awesome, but how do you change what's inside of it? After all, that's the whole point of an application, _doing_ something. This is what actions (and the dispatcher, as you'll see) are for. An action, in its simplest form, is an object describing the type of action (normally as a contant) and any data relevant to the action. It might look something like this:
+
+```js
+import { TODO_DELETE } from 'constants/todo';
+
+const deleteTodoAction = {
+  type : TODO_DELETE,
+  payload : {
+    id : 5
+  }
+};
+```
+
+All actions will flow through a store, whether it cares to do anything with them or not. It decides what actions to use based on their `type`, so a `Todo` store might want to know about all todo-related actions, e.g. `TODO_DELETE`, `TODO_CREATE`, `TODO_TOGGLE_COMPLETE`. These actions are a way to communicate with top-level stores from anywhere within the component hierarchy. Actions, which again are just simple objects, can be cumbersome to create, so there are normally _action creators_ to help with this. Here's one that helps with that `TODO_DELETE` action from above.
+
+```js
+import { TODO_DELETE } from 'constants/todo';
+
+export function deleteTodo (id) {
+  return {
+    type : TODO_DELETE,
+    payload : {
+      id // es6, remember!
+    }
+  };
+}
+```
+
+Notice how this abstracts away all of the actual creating and formatting of the action object, inserting the data that's passing in as arguments into the payload. Now that we know how to create actions, let's see how a store might handle one:
+
+```js
+Dispatcher.register(function (action) {
+  const { type, payload } = action;
+
+  switch (type) {
+    case TODO_DELETE:
+      this._todos = this._todos.filter(todo => todo.id !== payload.id);
+      this.emitChange();
+      break;
+  }
+}.bind(this));
+```
+
+Once the todos have been updated with the deletion, the change event will notify whichever component is listening to the store. That component will then, likely, re-render based on the new todos list, which allows all child components to automatically react to this change, without having to know what changed or how. Now, you may be wondering, how does the store know about this action? And here in lies a critical point.
+
+In the original Flux implementation, action creators (that `deleteTodo` function from earlier), would automatically call the dispatcher. So instead of just return a plain object, it would look something like this:
+
+```js
+import { TODO_DELETE } from 'constants/todo';
+import AppDispatcher from 'dispatchers/app';
+
+export function deleteTodo (id) {
+  AppDispatcher.dispatch({
+    type : TODO_DELETE,
+    payload : {
+      id // es6, remember!
+    }
+  });
+}
+```
+
+Many flavors of Flux have moved away from this, since it couples your action creators directly to a specific dispatcher. By just returning plain action objects, they can be dispatched however you want.
 
 ### Dispatcher
+
+The dispatcher is essentially a central routing system that forwards actions on to stores. But wait, why don't the actions just communicate directly with the store? Wouldn't that be easier? Great question, lad (or ladette)!
+
+  1. That would couple the action way too tightly to the store. And what happens when you want to communicate with multiple stores? By keeping them separated, you can dispatch actions freely without having to be aware of the other half of the implementation.
+  2. Using a dispatcher (in certain Flux implementations) allows stores to declare dependencies on other stores, so actions can be handled in a specific order.
+  3. Funneling all actions through a single point allows for central logging, debugging, and centralizes events that affect application state. Without a central system, there's no easy way to reliably track these actions.
 
 ### Immutability
 
@@ -139,9 +208,16 @@ The funneling of actions through a central dispatcher means that it's easy to ad
 #### Time Travel
 If you use immutable data structures, you now have the _completely free_ ability to completely step through time by replaying actions or stepping through previous states.
 
+### Async
+
+So we've now talked about how the dispatcher, actions, and stores all fit together. The discussion on unidirectional data flow discussed how awesome it is to be able to eliminate time from the equation, or at least limit its effect on the application. But we're well past the AJAX revolution, and webapps need to be able to work with asynchronous events. How does that fit into the Flux architecture?
+
 ### Flavors
 
 #### Redux
+**Recommended Reading**
+  - [Redux Documentation](http://rackt.github.io/redux/docs/introduction/Motivation.html)
+
 **Recommended Viewing**
   - [Dan Abramov - Live React](https://www.youtube.com/watch?v=xsSnOQynTHs#t=11m) - Links directly to the 11-minute timestamp where Dan Abramov discusses how traditional Flux stores can be simplified as reducers. Basically, he more elegantly describes everything I'm about to try to explain.
 
@@ -164,11 +240,11 @@ The function takes a collection and runs through them sequentially, "accumulatin
 }, initialState);
 ```
 
-So now your stores are essentially _reducers_; they receive actions and return a new state. And since they're pure, you can compose them together, into an application reducer. Actions come in, state comes out. The important thing to note here is that reducers must remain pure - that is, without side-effects - and they must return a _new_ state, they cannot mutate the old one.
+So now your stores have essentially become _reducers_; they receive actions and return a new state. And since they're pure, you can compose them together into one core application reducer. Actions come in, state comes out. The important thing to note here is that reducers must remain pure - that is, without side effects - and they must return a _new_ state, they cannot mutate the old one.
 
-By following these two simple rules, you not only reduce immediate complexity but you allow other things to occur naturally within the codebase. Redux can now see that your state is different, not by deep equality checks but just by reference, and automatically update subscribed components. No more `emitChange()` in stores!
+By following these two simple rules, you not only reduce immediate complexity but you allow other things to occur naturally within the codebase. Redux can naturally notice state changes, not by deep equality checks but just by new references, and automatically update subscribed components. No more `emitChange()`!
 
-Redux provides additional benefits; for one, since state is immutable, it's very easy to record state changes. This is the basis for [redux-devtools](https://github.com/gaearon/redux-devtools), which allow you to step through time. It also means it's possible to test applications simply by feeding it a collection of actions and analyzing the result; no extra effort required.
+Redux provides additional benefits; for one, since state is immutable, it's very easy to record new states as they appear over time. This is the basis for [redux-devtools](https://github.com/gaearon/redux-devtools), allowing you to quite literally step forward and backward through time. It also means it's possible to test applications simply by feeding it a collection of actions and analyzing the result; no extra effort required.
 
 Summary
 -------
