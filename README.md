@@ -88,9 +88,9 @@ This may seem like a lot of work, and it does take more effort than simply allow
 
 #### Smart Components
 
+Smart components are where data enters your application. These components might be things like views that include a bunch of smaller dumb components. They often don't include much or any DOM themselves, as their primary goal is to consume data and forward it (as well as actions) down into components.
 
-What about views? I had this exact question, which the author of Redux was [kind enough to clarify](https://github.com/rackt/redux/issues/562#event-384662248).
-
+This jumps a bit ahead into more of a Flux implementation, but if you're like me, you may wonder how smart components fit into larger application architectures. Say you have two entirely disparate views that need entirely different sets of data. That's a question I encountered, and one which the author of Redux was [kind enough to clarify](https://github.com/rackt/redux/issues/562#event-384662248). Basically, if your "smart" component is responsible for loading data into a store, it should also be responsible for removing it. I know, I know, we haven't even talked about Flux yet, but this will all make sense!
 
 Flux
 ----
@@ -177,12 +177,12 @@ Many flavors of Flux have moved away from this, since it couples your action cre
 The dispatcher is essentially a central routing system that forwards actions on to stores. But wait, why don't the actions just communicate directly with the store? Wouldn't that be easier? Great question, lad (or ladette)!
 
   1. That would couple the action way too tightly to the store. And what happens when you want to communicate with multiple stores? By keeping them separated, you can dispatch actions freely without having to be aware of the other half of the implementation.
-  2. Using a dispatcher (in certain Flux implementations) allows stores to declare dependencies on other stores, so actions can be handled in a specific order.
+  2. Using a dispatcher allows stores to declare dependencies on other stores, so actions can be dispatched in a specific order.
   3. Funneling all actions through a single point allows for central logging, debugging, and centralizes events that affect application state. Without a central system, there's no easy way to reliably track these actions.
 
 ### Immutability
 
-Let's approach this from the perspective of the the canonical Todo application. Think of how it's been written in the past, where your list of todos might start off as an empty array that gets pushed/popped/filtered over time.
+Let's approach this from the perspective of the the canonical Todo application. Think of how it's generally been written in the past, where your collection of todos might start off as an empty array that gets pushed/popped over time.
 
 ```js
 const todos = [];
@@ -191,11 +191,13 @@ const todos = [];
 todos.push(new Todo());
 ```
 
-What could be wrong with an example so simple? Well, for one, think about what would happen if you were to provide this list of todos to other components. How would they know something changed? There'd have be a deep equality check on the object, since the object reference is the same. Additionally, how would the application know _when_ to do this check? Angular attempts to solve this exact problem with its dirty checking and digest cycle, and it's not exactly a clean solution. Data could change anywhere at any point in time. Ever wonder why Angular 2.0 differs so wildly from its predecessor?
+What could be wrong with an example so simple? Well, for one, think about what would happen if you were to provide this list of todos to other components. How would they know something changed? There'd have be a deep equality check on the object, since the object reference is the same. Additionally, how would the application know _when_ to do this check? Flux solves this by having stores emit changes. Angular on the other hand eschews a global store and attempts to solve this exact problem with its dirty checking and digest cycle, allowing data to change anywhere at any point in time. Ever wonder why Angular 2.0 differs so wildly from its predecessor?
 
-Anyways, back to the example. The important thing to notice is that we're mutating `todos`, not producing a new brand new state. As a result, we've lost the ability to represent the old state and new state as separate entities at the same time, because the old one no longer exists. In order to traverse back through time, you'd have to remember which mutations occurred and when. You'd have to reverse actions, `popping` instead of `pushing`. Wouldn't it be easier to just represent distinct states as, well, distinct states (separate objects)? Enter immutability.
+But there's an even better way.
 
-...
+The important thing to notice with the above snippet is that we're mutating `todos`. We maintain the same object, but it just changes a little bit. As a result, we've lost the ability to represent the old state and new state as separate entities at the same time, because the old one no longer exists. In order to traverse back through time, you'd have to remember which mutations occurred and when. You'd have to reverse actions, `popping` instead of `pushing`. Wouldn't it be easier to just represent distinct states as, well, distinct states (separate objects)? Enter immutability.
+
+Immutability also offers performance benefits. Libraries such as ImmutableJS offer sophisticated algorithms that try to optimize the creation of new objects, by maintaining unchanged references and replacing those that need to be swapped. React's using the `PureRenderMixin` can take advantage of immutability and pure render functions by eliminating the need to perform complex diffs of the virtual DOM when a component's state and props haven't changed.
 
 ### Benefits
 
@@ -210,7 +212,7 @@ If you use immutable data structures, you now have the _completely free_ ability
 
 ### Async
 
-So we've now talked about how the dispatcher, actions, and stores all fit together. The discussion on unidirectional data flow discussed how awesome it is to be able to eliminate time from the equation, or at least limit its effect on the application. But we're well past the AJAX revolution, and webapps need to be able to work with asynchronous events. How does that fit into the Flux architecture?
+So we've now talked about how the dispatcher, actions, and stores all fit together. The discussion on unidirectional data flow discussed how awesome it is to be able to eliminate time from the equation, or at least limit its effect on the application. But we're well past the AJAX revolution, and web apps need to be able to work with asynchronous events. How does that fit into the Flux architecture?
 
 ### Flavors
 
