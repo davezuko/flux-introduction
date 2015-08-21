@@ -37,7 +37,7 @@ One of the biggest contributors to complexity in an application is statefulness;
 
 This sort of statefulness can lead to bigger issues such as race conditions or conflicting/out-of-sync data. A good example of this is the original Facebook chat application, described [here by Pete Hunt](https://www.youtube.com/watch?v=KtmjkCuV-EU#t=3m). Ultimately, complexity is exponentially proportional to the factor of time in an application - the more time, especially _changes over time_, plays a role in your application the harder it is to know what combination of actions produce a certain state.
 
-The solution is even simpler than reducing how many mutations are made or writing better code. It's centralizing the state that represents your application (the prevailing concept in Flux) and passing that state down _into_ components. If components can simply _react_ to changes, it suddenly becomes much easier to figure out what they're supposed to do or how they should rebder, and you can begin asserting things about them based on what properties they receive. In essence, you remove time from the equation.
+The solution is even simpler than reducing how many mutations are made or writing better code. It's centralizing the state that represents your application (the prevailing concept in Flux) and passing that state down _into_ components. If components can simply _react_ to changes, it suddenly becomes much easier to figure out what they're supposed to do or how they should render, and you can begin asserting things about them based on what properties they receive. In essence, you remove time from the equation.
 
 Unidirectional Data Flow
 -----------------------
@@ -109,7 +109,7 @@ Importantly, stores are _entirely synchronous_. They receive actions and perform
 
 ### Actions
 
-So you have a centralized store, awesome, but how do you change what's inside of it? After all, that's the whole point of an application, _doing_ something. This is what actions (and the dispatcher, as you'll see) are for. An action, in its simplest form, is an object describing the type of action (normally as a contant) and any data relevant to the action. It might look something like this:
+So you have a centralized store, awesome, but how do you change what's inside of it? After all, that's the whole point of an application, _doing_ something. This is what actions (and the dispatcher, as you'll see) are for. An action, in its simplest form, is an object describing the type of action (normally as a constant) and any data relevant to the action. It might look something like this:
 
 ```js
 import { TODO_DELETE } from 'constants/todo';
@@ -152,7 +152,7 @@ Dispatcher.register(function (action) {
 }.bind(this));
 ```
 
-Once the todos have been updated with the deletion, the change event will notify whichever component is listening to the store. That component will then, likely, re-render based on the new todos list, which allows all child components to automatically react to this change, without having to know what changed or how. Now, you may be wondering, how does the store know about this action? And here in lies a critical point.
+Once the todos have been updated with the deletion, the change event will notify whichever component is listening to the store. That component will then, likely, re-render based on the new todos list, which allows all child components to automatically react to this change, without having to know what changed or how. Now, you may be wondering, how does the store know about this action? And herein lies a critical point.
 
 In the original Flux implementation, action creators (that `deleteTodo` function from earlier), would automatically call the dispatcher. So instead of just return a plain object, it would look something like this:
 
@@ -202,7 +202,7 @@ Immutability also offers performance benefits. Libraries such as ImmutableJS off
 ### Benefits
 
 #### Hot Reloading
-Pure functions are what allow react-hot-loader to work. If a component's render function was non-deterministic (impure), the entire component would need to be reloaded after a change. However, since that's not the case, the previous state and properties can continue to exist as they were while the component's methods/render function are simply be swapped out for their new versions.
+Functional purity is what allows react-hot-loader to work. If a component's render function was non-deterministic (impure), the entire component would need to be reloaded after a change. However, since that's not the case, the previous state and properties can continue to exist as they were while the component's methods/render function are simply be swapped out for their new versions.
 
 #### Centralization
 The funneling of actions through a central dispatcher means that it's easy to add middleware between your actions and the stores. This opens up the possibility to implement features such as centralized logging and debugging.
@@ -213,6 +213,45 @@ If you use immutable data structures, you now have the _completely free_ ability
 ### Async
 
 So we've now talked about how the dispatcher, actions, and stores all fit together. The discussion on unidirectional data flow discussed how awesome it is to be able to eliminate time from the equation, or at least limit its effect on the application. But we're well past the AJAX revolution, and web apps need to be able to work with asynchronous events. How does that fit into the Flux architecture?
+
+Well, it simply means that you dispatch the actions when whatever asynchronous event completes! Make a request for the data you need, and once the response comes back the rest of the process remains just like it would be in a synchronous application. This keeps your stores simple, and you no longer have to worry about store data being potentially out of data; removing time from the equation really helps!
+
+In traditional Flux, this might look something like:
+
+```js
+function deleteTodoAsync (id) {
+  someAwesomeAjaxCall(id)
+    .then(resp => AppDispatcher.dispatch({
+      type : TODO_DELETE,
+      payload : {
+        newTodos : resp
+      }
+    });
+}
+```
+
+And, while we haven't covered it yet, let me give you an idea of how this is done in Redux. In Redux, actions don't dispatch themselves, but for asynchronous actions they can return _thunks_ to make the experience more pleasant.
+
+```js
+function deleteTodoAsync (id) {
+
+  // "callback" is generally written as "dispatch" in Redux,
+  // but I kept it this way for clarity.
+  return function deleteTodoAsyncThunk (callback) {
+    someAwesomeAjaxCall(id)
+      .then(resp => callback({
+        type : TODO_DELETE,
+        payload : {
+          newTodos : resp
+        }
+      });
+  };
+}
+```
+
+This means that you can pass the dispatcher function in as the callback and your action will be synchronously dispatched once the request completes. There are other solutions to this, especially with Redux which offers the ability to use middleware (such as to support actions that are promises), but this is just one example.
+
+The point is, always keep your stores synchronous. It solves a lot of problems with testability and mocking, and allows you to access stores without worrying about whether they're pending some additional action or not. The state you get from a store is _the_ canonical state.
 
 ### Flavors
 
@@ -250,3 +289,7 @@ Redux provides additional benefits; for one, since state is immutable, it's very
 
 Summary
 -------
+
+By representing state in a centralized location and simply reacting it, you gain the ability to write declarative and easily testable components. Maintaining synchronous stores removes time from the equation and in doing so eliminates the possibility for components relying on the same data to become out of sync with each other.
+
+It should be your goal to make components as declarative as possible, and represented chiefly by the properties that are provided to them.
